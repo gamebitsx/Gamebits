@@ -1,0 +1,950 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema BSF Laguna Sur - Bodegas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff', 100: '#e0f2fe', 200: '#bae6fd', 300: '#7dd3fc',
+                            400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7',
+                            700: '#0369a1', 800: '#075985', 900: '#0c4a6e',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out forwards',
+                        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+            min-height: 100vh;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .card-hover { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15); }
+        .btn-gradient {
+            background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-gradient:hover {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+        }
+        .table-row { transition: all 0.2s ease; }
+        .table-row:hover { background-color: #f8fafc; transform: scale(1.002); }
+        .modal-overlay { background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px); }
+        .input-focus:focus { box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2); }
+        .nav-glow { box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .badge-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .loading-spinner {
+            border: 3px solid rgba(14, 165, 233, 0.2);
+            border-top: 3px solid #0ea5e9;
+            border-radius: 50%;
+            width: 24px; height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .badge-active { 
+            background: linear-gradient(135deg, #10b981, #059669); 
+            color: white; 
+        }
+        .badge-inactive { 
+            background: linear-gradient(135deg, #ef4444, #dc2626); 
+            color: white; 
+        }
+        .status-dot { 
+            width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; 
+        }
+        .status-dot.active { background: #10b981; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
+        .status-dot.inactive { background: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3); }
+        
+        .activity-item { 
+            border-left: 3px solid #0ea5e9; 
+            transition: all 0.2s ease; 
+        }
+        .activity-item:hover { 
+            border-left-color: #0284c7; 
+            background: #f8fafc; 
+            transform: translateX(4px); 
+        }
+        .activity-icon { 
+            width: 32px; height: 32px; border-radius: 8px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 14px; 
+        }
+        .activity-icon.added { background: #dcfce7; color: #16a34a; }
+        .activity-icon.modified { background: #dbeafe; color: #2563eb; }
+        
+        .chart-container { 
+            position: relative; height: 200px; width: 100%; 
+        }
+    </style>
+</head>
+<body class="font-sans antialiased">
+
+    <nav class="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-900 text-white shadow-xl nav-glow sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <div class="h-14 w-14 rounded-xl bg-white p-1.5 shadow-lg flex items-center justify-center">
+                            <i class="fa-solid fa-warehouse text-brand-600 text-2xl"></i>
+                        </div>
+                        <div class="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-brand-900 badge-pulse"></div>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-wide bg-gradient-to-r from-white to-brand-200 bg-clip-text text-transparent">
+                            Sistema de gestión de Bodegas
+                        </h1>
+                        <p class="text-xs text-brand-200 font-medium tracking-wider">Centro BSF Laguna Sur</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button onclick="refreshData()" 
+                            class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-700/50 hover:bg-brand-600/70 transition-all duration-300 text-sm font-medium backdrop-blur-sm border border-brand-600/30 card-hover whitespace-nowrap"
+                            title="Actualizar desde Airtable" id="refreshBtn">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span class="hidden sm:inline">Actualizar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6 animate-slide-up">
+            <div class="glass-panel rounded-2xl p-6 card-hover border-l-4 border-brand-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Total Bodegas</p>
+                        <p class="text-3xl font-bold text-brand-700 mt-1" id="totalCount">-</p>
+                    </div>
+                    <div class="w-14 h-14 bg-brand-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-warehouse text-brand-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel rounded-2xl p-6 card-hover border-l-4 border-green-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Activas</p>
+                        <p class="text-3xl font-bold text-green-600 mt-1" id="activeCount">-</p>
+                    </div>
+                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-circle-check text-green-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel rounded-2xl p-6 card-hover border-l-4 border-red-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Inactivas</p>
+                        <p class="text-3xl font-bold text-red-600 mt-1" id="inactiveCount">-</p>
+                    </div>
+                    <div class="w-14 h-14 bg-red-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-circle-xmark text-red-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel rounded-2xl p-6 card-hover border-l-4 border-purple-500">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-slate-500 font-medium uppercase tracking-wide">Última Sync</p>
+                        <p class="text-lg font-bold text-purple-600 mt-1" id="lastSync">-</p>
+                    </div>
+                    <div class="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center">
+                        <i class="fa-solid fa-cloud-arrow-up text-purple-600 text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="glass-panel rounded-2xl p-6 card-hover lg:col-span-1 animate-fade-in" style="animation-delay: 0.1s;">
+                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-brand-600"></i>
+                    Distribución por Estado
+                </h3>
+                <div class="chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="mt-4 flex justify-center gap-6 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="status-dot active"></span>
+                        <span class="text-slate-600">Activas: <span id="activePercent" class="font-semibold text-green-600">0%</span></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="status-dot inactive"></span>
+                        <span class="text-slate-600">Inactivas: <span id="inactivePercent" class="font-semibold text-red-600">0%</span></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-panel rounded-2xl p-6 card-hover lg:col-span-2 animate-fade-in" style="animation-delay: 0.15s;">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-600"></i>
+                        Actividad Reciente
+                    </h3>
+                    <span class="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">Últimos 5 cambios</span>
+                </div>
+                <div id="recentActivity" class="space-y-3 max-h-64 overflow-y-auto pr-2">
+                    <div class="text-center text-slate-400 py-8">
+                        <i class="fa-solid fa-inbox text-3xl mb-2"></i>
+                        <p class="text-sm">Sin actividad reciente</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loadingState" class="glass-panel rounded-2xl p-12 text-center mb-6 hidden">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-slate-600 font-medium">Sincronizando con Airtable...</p>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-6 mb-6 animate-fade-in" style="animation-delay: 0.2s;" id="controlsSection">
+            <div class="flex flex-col lg:flex-row justify-between items-center gap-4">
+                <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <div class="relative w-full sm:w-64">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-search text-slate-400 text-lg"></i>
+                        </div>
+                        <input type="text" id="searchInput" 
+                               class="block w-full pl-12 pr-4 py-3.5 border-2 border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all input-focus font-medium" 
+                               placeholder="Buscar por código o nombre...">
+                    </div>
+                    <select id="statusFilter" class="px-4 py-3.5 border-2 border-slate-200 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all input-focus font-medium">
+                        <option value="">Todos los estados</option>
+                        <option value="Activo">Activas</option>
+                        <option value="Inactivo">Inactivas</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3 w-full lg:w-auto">
+                    <button onclick="openModal()" 
+                            class="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-3.5 btn-gradient text-white rounded-xl font-semibold shadow-lg card-hover">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Nueva Bodega</span>
+                    </button>
+                </div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
+                <p class="text-sm text-slate-500">
+                    <i class="fa-solid fa-info-circle mr-2"></i>
+                    Mostrando <span id="showingCount" class="font-semibold text-brand-600">0</span> de <span id="totalDisplay" class="font-semibold text-brand-600">0</span> bodegas
+                </p>
+                <button onclick="clearSearch()" class="text-sm text-brand-600 hover:text-brand-700 font-medium transition">
+                    <i class="fa-solid fa-rotate-left mr-1"></i>Limpiar Filtros
+                </button>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl overflow-hidden shadow-lg animate-fade-in" style="animation-delay: 0.25s;" id="tableSection">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-gradient-to-r from-brand-50 to-brand-100">
+                        <tr>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-brand-800 uppercase tracking-wider"><i class="fa-solid fa-barcode mr-2"></i>Código</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-brand-800 uppercase tracking-wider"><i class="fa-solid fa-building mr-2"></i>Nombre</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-brand-800 uppercase tracking-wider"><i class="fa-solid fa-clock-rotate-left mr-2"></i>Nombres Anteriores</th>
+                            <th class="px-6 py-4 text-left text-xs font-bold text-brand-800 uppercase tracking-wider"><i class="fa-solid fa-toggle-on mr-2"></i>Estado</th>
+                            <th class="relative px-6 py-4"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="warehouseTableBody" class="bg-white divide-y divide-slate-200"></tbody>
+                </table>
+            </div>
+            
+            <div id="emptyState" class="hidden p-16 text-center">
+                <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand-50 mb-6">
+                    <i class="fa-solid fa-box-open text-brand-300 text-4xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-800 mb-2">No se encontraron bodegas</h3>
+                <p class="text-slate-500 mb-6 max-w-md mx-auto">Intenta ajustar tu búsqueda o agrega una nueva bodega.</p>
+                <button onclick="openModal()" class="inline-flex items-center gap-2 px-6 py-3 btn-gradient text-white rounded-xl font-semibold shadow-lg card-hover">
+                    <i class="fa-solid fa-plus"></i><span>Agregar Bodega</span>
+                </button>
+            </div>
+            
+            <div id="pagination" class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                <p class="text-sm text-slate-500">Página <span id="currentPage" class="font-semibold text-brand-600">1</span> de <span id="totalPages" class="font-semibold text-brand-600">1</span></p>
+                <div class="flex items-center gap-2">
+                    <button onclick="changePage(-1)" id="prevBtn" class="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-brand-50 hover:border-brand-300 transition disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-left"></i></button>
+                    <button onclick="changePage(1)" id="nextBtn" class="px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-brand-50 hover:border-brand-300 transition disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 mt-12">
+        <div class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-lg bg-brand-50 flex items-center justify-center">
+                        <i class="fa-solid fa-warehouse text-brand-600"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-slate-700">Centro Logítico BSF Laguna Sur</p>
+                        <p class="text-xs text-slate-500">App Sistema de Gestión de Bodegas</p>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-400">&copy; 2026 Todos los derechos reservados Ejara</p>
+            </div>
+        </div>
+    </footer>
+
+    <div id="modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-overlay fixed inset-0 transition-opacity" onclick="closeModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div class="inline-block align-bottom glass-panel rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full animate-slide-up">
+                <div class="bg-gradient-to-r from-brand-600 to-brand-700 px-6 py-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-white" id="modalTitle"><i class="fa-solid fa-warehouse mr-2"></i>Nueva Bodega</h3>
+                        <button onclick="closeModal()" class="text-white/70 hover:text-white transition"><i class="fa-solid fa-xmark text-xl"></i></button>
+                    </div>
+                </div>
+                <div class="px-6 py-6">
+                    <input type="hidden" id="warehouseId">
+                    <input type="hidden" id="airtableRecordId">
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2"><i class="fa-solid fa-barcode mr-2 text-brand-600"></i>Código *</label>
+                            <input type="text" id="code" class="block w-full border-2 border-slate-200 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all input-focus font-medium" placeholder="Ej: A001">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2"><i class="fa-solid fa-building mr-2 text-brand-600"></i>Nombre *</label>
+                            <input type="text" id="name" class="block w-full border-2 border-slate-200 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all input-focus font-medium" placeholder="Ej: Solow Limitada">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2"><i class="fa-solid fa-clock-rotate-left mr-2 text-brand-600"></i>Nombres Anteriores</label>
+                            <textarea id="previous" rows="2" class="block w-full border-2 border-slate-200 rounded-xl shadow-sm py-3 px-4 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm transition-all input-focus font-medium resize-none" placeholder="Ej: Importadora River Richer"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2"><i class="fa-solid fa-toggle-on mr-2 text-brand-600"></i>Estado *</label>
+                            <div class="flex gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="status" value="Activo" checked class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-slate-300">
+                                    <span class="text-sm font-medium text-slate-700 flex items-center gap-1">
+                                        <span class="status-dot active"></span>Activo
+                                    </span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="status" value="Inactivo" class="w-4 h-4 text-brand-600 focus:ring-brand-500 border-slate-300">
+                                    <span class="text-sm font-medium text-slate-700 flex items-center gap-1">
+                                        <span class="status-dot inactive"></span>Inactivo
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row gap-3">
+                    <button type="button" onclick="saveWarehouse()" id="saveBtn" class="w-full inline-flex justify-center items-center gap-2 rounded-xl border border-transparent shadow-sm px-6 py-3 btn-gradient text-base font-semibold text-white hover:shadow-lg transition sm:flex-1">
+                        <span id="saveBtnText"><i class="fa-solid fa-check"></i><span>Guardar</span></span>
+                    </button>
+                    <button type="button" onclick="closeModal()" class="w-full inline-flex justify-center items-center gap-2 rounded-xl border-2 border-slate-300 shadow-sm px-6 py-3 bg-white text-base font-semibold text-slate-700 hover:bg-slate-50 transition sm:flex-1">
+                        <i class="fa-solid fa-xmark"></i><span>Cancelar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="deleteModal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="modal-overlay fixed inset-0 transition-opacity" onclick="cancelDelete()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+            <div class="inline-block align-bottom glass-panel rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md w-full animate-slide-up">
+                <div class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center"><i class="fa-solid fa-triangle-exclamation text-white text-xl"></i></div>
+                        <h3 class="text-lg font-bold text-white">Confirmar Eliminación</h3>
+                    </div>
+                </div>
+                <div class="px-6 py-6">
+                    <p class="text-slate-600 text-sm">¿Estás seguro de eliminar esta bodega? Esta acción no se puede deshacer.</p>
+                    <p id="deleteInfo" class="text-slate-500 text-xs mt-3 font-medium"></p>
+                </div>
+                <div class="bg-slate-50 px-6 py-4 flex flex-col sm:flex-row gap-3">
+                    <button type="button" onclick="confirmDeleteAction()" id="deleteConfirmBtn" class="w-full inline-flex justify-center items-center gap-2 rounded-xl border border-transparent shadow-sm px-6 py-3 bg-red-600 text-base font-semibold text-white hover:bg-red-700 transition sm:flex-1">
+                        <span id="deleteBtnText"><i class="fa-solid fa-trash"></i><span>Eliminar</span></span>
+                    </button>
+                    <button type="button" onclick="cancelDelete()" class="w-full inline-flex justify-center items-center gap-2 rounded-xl border-2 border-slate-300 shadow-sm px-6 py-3 bg-white text-base font-semibold text-slate-700 hover:bg-slate-50 transition sm:flex-1">
+                        <i class="fa-solid fa-xmark"></i><span>Cancelar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-24 opacity-0 transition-all duration-300 z-50">
+        <div class="glass-panel rounded-xl shadow-2xl px-6 py-4 flex items-center gap-3 min-w-[300px]">
+            <div id="toastIcon" class="w-10 h-10 rounded-full flex items-center justify-center"></div>
+            <div class="flex-1">
+                <p id="toastTitle" class="font-semibold text-slate-800 text-sm"></p>
+                <p id="toastMessage" class="text-slate-500 text-xs"></p>
+            </div>
+            <button onclick="hideToast()" class="text-slate-400 hover:text-slate-600 transition"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    </div>
+
+    <script>
+        const AIRTABLE_CONFIG = {
+            API_KEY: 'pateNQbz10aMdjkU1.4b102e55b6274015da2805adb72a2cb0b735bc33e0dc52465780ed2f1c993343',
+            BASE_ID: 'appiGy1FjWJE5TZ8D',
+            TABLE_NAME: 'Bodegas',
+            API_URL: 'https://api.airtable.com/v0'
+        };
+
+        let warehouses = [];
+        let filteredWarehouses = [];
+        let currentPage = 1;
+        const itemsPerPage = 15;
+        let deleteRecordId = null;
+        let isSyncing = false;
+        let statusChart = null;
+        let recentActivities = [];
+
+        const FIELD_MAP = {
+            appToAirtable: {
+                code: 'Código de Bodega',
+                name: 'Nombre de la Bodega',
+                previous: 'Nombres Anteriores de la Bodega',
+                status: 'Estado'
+            },
+            airtableToApp: {
+                'Código de Bodega': 'code',
+                'Nombre de la Bodega': 'name',
+                'Nombres Anteriores de la Bodega': 'previous',
+                'Estado': 'status'
+            }
+        };
+
+        async function airtableRequest(endpoint, method = 'GET', body = null) {
+            const url = `${AIRTABLE_CONFIG.API_URL}/${AIRTABLE_CONFIG.BASE_ID}/${AIRTABLE_CONFIG.TABLE_NAME}${endpoint}`;
+            const headers = {
+                'Authorization': `Bearer ${AIRTABLE_CONFIG.API_KEY}`,
+                'Content-Type': 'application/json'
+            };
+            const config = { method, headers };
+            if (body) config.body = JSON.stringify(body);
+            
+            const response = await fetch(url, config);
+            
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.error?.message || `Error ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        }
+
+        async function fetchFromAirtable() {
+            let allRecords = [];
+            let offset = null;
+            do {
+                const params = offset ? `?offset=${offset}` : '';
+                const data = await airtableRequest(params);
+                allRecords = allRecords.concat(data.records);
+                offset = data.offset;
+            } while (offset);
+            return allRecords;
+        }
+
+        function transformFromAirtable(record) {
+            const fields = record.fields;
+            return {
+                id: record.id,
+                code: fields[FIELD_MAP.appToAirtable.code] || '',
+                name: fields[FIELD_MAP.appToAirtable.name] || '',
+                previous: fields[FIELD_MAP.appToAirtable.previous] || '',
+                status: fields[FIELD_MAP.appToAirtable.status] || 'Activo',
+                lastModified: record.lastModifiedTime || new Date().toISOString()
+            };
+        }
+
+        function transformToAirtable(warehouse) {
+            const fields = {};
+            fields[FIELD_MAP.appToAirtable.code] = warehouse.code;
+            fields[FIELD_MAP.appToAirtable.name] = warehouse.name;
+            fields[FIELD_MAP.appToAirtable.previous] = warehouse.previous || '';
+            fields[FIELD_MAP.appToAirtable.status] = warehouse.status || 'Activo';
+            return { fields };
+        }
+
+        async function syncFromAirtable() {
+            if (isSyncing) return;
+            isSyncing = true;
+            showLoading(true);
+            
+            try {
+                const records = await fetchFromAirtable();
+                warehouses = records.map(transformFromAirtable);
+                
+                recentActivities = [...warehouses]
+                    .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified))
+                    .slice(0, 5)
+                    .map(w => ({
+                        ...w,
+                        action: 'modified',
+                        timestamp: w.lastModified
+                    }));
+                
+                updateLastSync();
+                filterAndRender();
+                updateStats();
+                renderStatusChart();
+                renderRecentActivity();
+                
+                showToast('Éxito', `Se sincronizaron ${warehouses.length} bodegas`, 'success');
+            } catch (error) {
+                console.error('Error sincronizando:', error);
+                showToast('Error', error.message, 'error');
+            } finally {
+                isSyncing = false;
+                showLoading(false);
+            }
+        }
+
+        async function createInAirtable(warehouse) {
+            const data = transformToAirtable(warehouse);
+            const response = await airtableRequest('', 'POST', data);
+            return transformFromAirtable(response);
+        }
+
+        async function updateInAirtable(warehouse) {
+            const data = transformToAirtable(warehouse);
+            const response = await airtableRequest(`/${warehouse.id}`, 'PATCH', data);
+            return transformFromAirtable(response);
+        }
+
+        async function deleteFromAirtable(recordId) {
+            await airtableRequest(`?records[]=${recordId}`, 'DELETE');
+        }
+
+        // ✅ CORREGIDO: Agregar "data:" correctamente
+        function renderStatusChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            const activeCount = warehouses.filter(w => w.status === 'Activo').length;
+            const inactiveCount = warehouses.filter(w => w.status === 'Inactivo').length;
+            const total = warehouses.length || 1;
+            
+            document.getElementById('activePercent').innerText = `${Math.round((activeCount/total)*100)}%`;
+            document.getElementById('inactivePercent').innerText = `${Math.round((inactiveCount/total)*100)}%`;
+            
+            if (statusChart) {
+                statusChart.destroy();
+            }
+            
+            // ✅ CORRECCIÓN: Sintaxis correcta con "data:"
+            statusChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {  // ← AGREGADO "data:"
+                    labels: ['Activas', 'Inactivas'],
+                    datasets: [{
+                        data: [activeCount, inactiveCount],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function renderRecentActivity() {
+            const container = document.getElementById('recentActivity');
+            
+            if (recentActivities.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-slate-400 py-8">
+                        <i class="fa-solid fa-inbox text-3xl mb-2"></i>
+                        <p class="text-sm">Sin actividad reciente</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = recentActivities.map(activity => {
+                const isAdded = activity.action === 'added';
+                const iconClass = isAdded ? 'added' : 'modified';
+                const icon = isAdded ? '<i class="fa-solid fa-plus"></i>' : '<i class="fa-solid fa-pen"></i>';
+                const timeAgo = getTimeAgo(activity.timestamp);
+                
+                return `
+                    <div class="activity-item p-3 rounded-lg bg-white border border-slate-100">
+                        <div class="flex items-start gap-3">
+                            <div class="activity-icon ${iconClass} flex-shrink-0">
+                                ${icon}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-slate-800 truncate">${activity.name}</p>
+                                <p class="text-xs text-slate-500">${activity.code} • ${timeAgo}</p>
+                            </div>
+                            <span class="text-xs px-2 py-1 rounded-full ${activity.status === 'Activo' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${activity.status}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTimeAgo(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            if (diffMins < 1) return 'Ahora';
+            if (diffMins < 60) return `Hace ${diffMins} min`;
+            if (diffHours < 24) return `Hace ${diffHours} h`;
+            if (diffDays < 7) return `Hace ${diffDays} d`;
+            return date.toLocaleDateString('es-CL');
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingState').classList.toggle('hidden', !show);
+            document.getElementById('controlsSection').classList.toggle('hidden', show);
+            document.getElementById('tableSection').classList.toggle('hidden', show);
+            document.getElementById('refreshBtn').disabled = show;
+        }
+
+        function updateLastSync() {
+            const now = new Date();
+            document.getElementById('lastSync').innerText = now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function updateStats() {
+            const total = warehouses.length;
+            const active = warehouses.filter(w => w.status === 'Activo').length;
+            const inactive = warehouses.filter(w => w.status === 'Inactivo').length;
+            
+            document.getElementById('totalCount').innerText = total;
+            document.getElementById('activeCount').innerText = active;
+            document.getElementById('inactiveCount').innerText = inactive;
+        }
+
+        function filterAndRender() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            filteredWarehouses = warehouses.filter(w => {
+                const matchesSearch = w.code.toLowerCase().includes(searchTerm) || 
+                                     w.name.toLowerCase().includes(searchTerm);
+                const matchesStatus = !statusFilter || w.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            });
+            
+            renderTable();
+            updatePagination();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('warehouseTableBody');
+            const emptyState = document.getElementById('emptyState');
+            tbody.innerHTML = '';
+            const start = (currentPage - 1) * itemsPerPage;
+            const pageData = filteredWarehouses.slice(start, start + itemsPerPage);
+            
+            if (filteredWarehouses.length === 0) {
+                emptyState.classList.remove('hidden');
+                document.getElementById('pagination').classList.add('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+                document.getElementById('pagination').classList.remove('hidden');
+            }
+            
+            document.getElementById('showingCount').innerText = filteredWarehouses.length;
+            document.getElementById('totalDisplay').innerText = warehouses.length;
+            
+            pageData.forEach(item => {
+                const statusBadge = item.status === 'Activo' 
+                    ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium badge-active">
+                        <span class="status-dot active"></span>Activo
+                    </span>`
+                    : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium badge-inactive">
+                        <span class="status-dot inactive"></span>Inactivo
+                    </span>`;
+                
+                const tr = document.createElement('tr');
+                tr.className = "table-row border-b border-slate-100 last:border-0 cursor-pointer";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-11 w-11 bg-gradient-to-br from-brand-100 to-brand-200 rounded-xl flex items-center justify-center text-brand-700 font-bold border border-brand-200 shadow-sm">
+                                ${item.code.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div class="ml-4"><div class="text-sm font-bold text-slate-900">${item.code}</div></div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm text-slate-900 font-semibold">${item.name}</div></td>
+                    <td class="px-6 py-4"><div class="text-sm text-slate-500 truncate max-w-xs" title="${item.previous}">${item.previous || '<span class="text-slate-300">-</span>'}</div></td>
+                    <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div class="flex items-center justify-end gap-2">
+                            <button onclick="prepareEdit('${item.id}')" class="w-9 h-9 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-600 transition flex items-center justify-center card-hover" title="Editar"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button onclick="confirmDelete('${item.id}')" class="w-9 h-9 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition flex items-center justify-center card-hover" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredWarehouses.length / itemsPerPage) || 1;
+            document.getElementById('currentPage').innerText = currentPage;
+            document.getElementById('totalPages').innerText = totalPages;
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        }
+
+        function changePage(delta) {
+            const totalPages = Math.ceil(filteredWarehouses.length / itemsPerPage) || 1;
+            currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+            renderTable();
+            updatePagination();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('statusFilter').value = '';
+            currentPage = 1;
+            filterAndRender();
+        }
+
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modalTitle');
+        const codeInput = document.getElementById('code');
+        const nameInput = document.getElementById('name');
+        const prevInput = document.getElementById('previous');
+        const idInput = document.getElementById('warehouseId');
+        const airtableIdInput = document.getElementById('airtableRecordId');
+
+        function openModal() {
+            modalTitle.innerHTML = '<i class="fa-solid fa-warehouse mr-2"></i>Nueva Bodega';
+            idInput.value = '';
+            airtableIdInput.value = '';
+            codeInput.value = '';
+            nameInput.value = '';
+            prevInput.value = '';
+            document.querySelector('input[name="status"][value="Activo"]').checked = true;
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() { modal.classList.add('hidden'); }
+
+        function prepareEdit(airtableId) {
+            const item = warehouses.find(w => w.id === airtableId);
+            if (!item) return;
+            modalTitle.innerHTML = '<i class="fa-solid fa-pen-to-square mr-2"></i>Editar Bodega';
+            idInput.value = item.code;
+            airtableIdInput.value = item.id;
+            codeInput.value = item.code;
+            nameInput.value = item.name;
+            prevInput.value = item.previous;
+            document.querySelector(`input[name="status"][value="${item.status}"]`).checked = true;
+            modal.classList.remove('hidden');
+        }
+
+        async function saveWarehouse() {
+            const code = codeInput.value.trim();
+            const name = nameInput.value.trim();
+            const previous = prevInput.value.trim();
+            const status = document.querySelector('input[name="status"]:checked').value;
+            const airtableId = airtableIdInput.value;
+            
+            if (!code || !name) { 
+                showToast("Error", "Código y Nombre son obligatorios", "error"); 
+                return; 
+            }
+            
+            const saveBtn = document.getElementById('saveBtn');
+            const originalBtnText = saveBtn.innerHTML;
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<div class="loading-spinner"></div>';
+            
+            try {
+                const warehouseData = { code, name, previous, status };
+                
+                if (airtableId) {
+                    const updated = await updateInAirtable({ id: airtableId, ...warehouseData });
+                    const index = warehouses.findIndex(w => w.id === airtableId);
+                    if (index !== -1) {
+                        warehouses[index] = { ...updated, lastModified: new Date().toISOString() };
+                        recentActivities = recentActivities.filter(a => a.id !== airtableId);
+                        recentActivities.unshift({ ...warehouses[index], action: 'modified', timestamp: new Date().toISOString() });
+                        recentActivities = recentActivities.slice(0, 5);
+                    }
+                    showToast("Éxito", "Bodega actualizada", "success");
+                } else {
+                    if (warehouses.some(w => w.code.toLowerCase() === code.toLowerCase())) { 
+                        throw new Error("El código ya existe"); 
+                    }
+                    const created = await createInAirtable(warehouseData);
+                    warehouses.unshift(created);
+                    recentActivities.unshift({ ...created, action: 'added', timestamp: new Date().toISOString() });
+                    recentActivities = recentActivities.slice(0, 5);
+                    showToast("Éxito", "Bodega creada", "success");
+                }
+                
+                updateStats();
+                renderStatusChart();
+                renderRecentActivity();
+                filterAndRender();
+                closeModal();
+                clearSearch();
+            } catch (error) {
+                console.error('Error guardando:', error);
+                showToast("Error", error.message, "error");
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalBtnText;
+            }
+        }
+
+        function confirmDelete(airtableId) {
+            deleteRecordId = airtableId;
+            const item = warehouses.find(w => w.id === airtableId);
+            document.getElementById('deleteInfo').innerText = `${item?.code} - ${item?.name}`;
+            document.getElementById('deleteModal').classList.remove('hidden');
+        }
+
+        function cancelDelete() { 
+            deleteRecordId = null; 
+            document.getElementById('deleteModal').classList.add('hidden'); 
+        }
+
+        async function confirmDeleteAction() {
+            if (!deleteRecordId) return;
+            const deleteBtn = document.getElementById('deleteConfirmBtn');
+            const originalBtnText = deleteBtn.innerHTML;
+            deleteBtn.disabled = true;
+            deleteBtn.innerHTML = '<div class="loading-spinner"></div>';
+            
+            try {
+                await deleteFromAirtable(deleteRecordId);
+                warehouses = warehouses.filter(w => w.id !== deleteRecordId);
+                recentActivities = recentActivities.filter(a => a.id !== deleteRecordId);
+                
+                updateStats();
+                renderStatusChart();
+                renderRecentActivity();
+                filterAndRender();
+                showToast("Éxito", "Bodega eliminada", "success");
+            } catch (error) {
+                console.error('Error eliminando:', error);
+                showToast("Error", error.message, "error");
+            } finally {
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = originalBtnText;
+                cancelDelete();
+            }
+        }
+
+        async function refreshData() { 
+            await syncFromAirtable(); 
+        }
+
+        function showToast(title, message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastTitle = document.getElementById('toastTitle');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+            
+            toastTitle.innerText = title;
+            toastMessage.innerText = message;
+            
+            if (type === 'success') {
+                toastIcon.innerHTML = '<i class="fa-solid fa-check-circle text-green-500 text-xl"></i>';
+                toastIcon.className = 'w-10 h-10 rounded-full bg-green-50 flex items-center justify-center';
+            } else {
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-exclamation text-red-500 text-xl"></i>';
+                toastIcon.className = 'w-10 h-10 rounded-full bg-red-50 flex items-center justify-center';
+            }
+            
+            toast.classList.remove('translate-y-24', 'opacity-0');
+            setTimeout(() => hideToast(), 4000);
+        }
+
+        function hideToast() { 
+            document.getElementById('toast').classList.add('translate-y-24', 'opacity-0'); 
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('searchInput').addEventListener('input', () => { 
+                currentPage = 1; 
+                filterAndRender(); 
+            });
+            document.getElementById('statusFilter').addEventListener('change', () => { 
+                currentPage = 1; 
+                filterAndRender(); 
+            });
+            document.addEventListener('keydown', (e) => { 
+                if (e.key === 'Escape') { 
+                    closeModal(); 
+                    cancelDelete(); 
+                } 
+            });
+            syncFromAirtable();
+        });
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('modal');
+            const deleteModal = document.getElementById('deleteModal');
+            if (event.target === modal) closeModal();
+            if (event.target === deleteModal) cancelDelete();
+        }
+    </script>
+</body>
+</html>
